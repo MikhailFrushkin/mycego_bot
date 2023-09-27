@@ -52,5 +52,23 @@ def post_works(date, user_id_site, works):
     return response.status_code
 
 
+def get_works_lists(user_id_site):
+    url = f'{domain}/api-auth/view_works/'
+    data = {'user': user_id_site}
+    json_data = json.dumps(data)
+    headers = {'Content-Type': 'application/json'}
+    response = requests.get(url, data=json_data, headers=headers)
+    return response.json()
+
+
+def get_details_works_lists(work_id):
+    url = f'{domain}/api-auth/view_detail_work/'
+    data = {'work_id': work_id}
+    json_data = json.dumps(data)
+    headers = {'Content-Type': 'application/json'}
+    response = requests.get(url, data=json_data, headers=headers)
+    return response.json()
+
+
 if __name__ == '__main__':
     check_user_api('admin', 'fma160392')

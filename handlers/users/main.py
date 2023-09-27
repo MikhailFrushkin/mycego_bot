@@ -10,13 +10,14 @@ from loguru import logger
 import bot
 from data.config import path
 from data.db import User
-from data.api import check_user_api, create_or_get_apport, get_appointments, delete_appointments, get_works, post_works
+from data.api import check_user_api, create_or_get_apport, get_appointments, delete_appointments, get_works, post_works, \
+    get_works_lists, get_details_works_lists
 from handlers.users.back import back
 from keyboards.default.menu import menu, ready_button
 from keyboards.inline.action import generate_next_week_dates_keyboard, generate_time_keyboard, generate_time_keyboard2, \
-    generate_works, generate_current_week_works_dates
+    generate_works, generate_current_week_works_dates, create_works_list
 from loader import dp, bot
-from state.states import AuthState, WorkGraf, WorkList
+from state.states import AuthState, WorkGraf, WorkList, ViewWorkList
 
 
 @dp.message_handler(commands=['start'], state='*')
@@ -115,26 +116,25 @@ async def nums_works(message: types.Message, state: FSMContext):
 async def bot_message(message: types.Message, state: FSMContext):
     try:
         user = User.get(telegram_id=str(message.from_user.id))
-
+        user_id_site = user.site_user_id
         text = message.text
         user_id = message.from_user.id
         if text == 'Назад':
             await back(message, state)
-        elif text == 'Записаться':
+        elif text == '🗓Заявка в график':
             await WorkGraf.choice_date.set()
             await bot.send_message(user_id, 'Выберите дату для записи:',
                                    reply_markup=generate_next_week_dates_keyboard())
-        elif text == 'Мои записи':
-            user_id_site = user.site_user_id
+        elif text == '📕Мои записи':
 
             ap_list = get_appointments(user_id_site).get('message')
             await bot.send_message(user_id, 'Записи на текущую и следующую неделю:')
             await WorkGraf.delete_row.set()
             for index, item in enumerate(ap_list, start=1):
-                verified = 'Утверждено' if item[3] else 'Не утверждено'
+                verified = '✅Утверждено' if item[3] else '⛔️Не утверждено'
                 # Формируем текст сообщения
                 message_text = f'{index}. {item[0]} с {item[1].replace(":00:00", ":00")} ' \
-                               f'по {item[2].replace(":00:00", ":00")} ({verified})'
+                               f'по {item[2].replace(":00:00", ":00")} \n{verified}'
 
                 keyboard = types.InlineKeyboardMarkup()
                 delete_button = types.InlineKeyboardButton("Удалить", callback_data=f"delete_{item[4]}")
@@ -143,10 +143,16 @@ async def bot_message(message: types.Message, state: FSMContext):
                     await bot.send_message(user_id, message_text)
                 else:
                     await bot.send_message(user_id, message_text, reply_markup=keyboard)
-        elif text == 'Заполнить лист':
+        elif text == '🔨Заполнить лист работ':
             await bot.send_message(user_id, 'Выберите дату:', reply_markup=generate_current_week_works_dates())
             await WorkList.choice_date.set()
-
+        elif text == '📝Мои листы работ':
+            works_lists = get_works_lists(user_id_site).get('data')
+            await ViewWorkList.view_work.set()
+            if len(works_lists) > 0:
+                await bot.send_message(user_id, "Ваши сдельные листы:", reply_markup=create_works_list(works_lists))
+            else:
+                await bot.send_message(user_id, "Ни чего не найдено", reply_markup=menu)
         else:
             await bot.send_message(user_id, text)
 
@@ -158,77 +164,124 @@ async def bot_message(message: types.Message, state: FSMContext):
 @dp.callback_query_handler(state=[WorkGraf.choice_date])
 async def process_date(callback_query: types.CallbackQuery, state: FSMContext):
     async with state.proxy() as data:
-        date = callback_query.data.split('_')[1]
-        data['date'] = date
-        await bot.send_message(callback_query.from_user.id, 'Выберите время с:', reply_markup=generate_time_keyboard())
-        await WorkGraf.choice_time.set()
+        if callback_query.data == 'exit':
+            await back(callback_query, state)
+        else:
+            date = callback_query.data.split('_')[1]
+            data['date'] = date
+            await bot.send_message(callback_query.from_user.id, 'Выберите время с:', reply_markup=generate_time_keyboard())
+            await WorkGraf.choice_time.set()
 
 
 @dp.callback_query_handler(state=[WorkGraf.choice_time])
 async def process_time(callback_query: types.CallbackQuery, state: FSMContext):
-    async with state.proxy() as data:
-        start_time = callback_query.data
-        data['start_time'] = start_time
-        await bot.send_message(callback_query.from_user.id, 'Выберите время до:',
-                               reply_markup=generate_time_keyboard2())
-        await WorkGraf.choice_time2.set()
+    if callback_query.data == 'exit':
+        await back(callback_query, state)
+    else:
+        async with state.proxy() as data:
+            start_time = callback_query.data
+            data['start_time'] = start_time
+            await bot.send_message(callback_query.from_user.id, 'Выберите время до:',
+                                   reply_markup=generate_time_keyboard2())
+            await WorkGraf.choice_time2.set()
 
 
 @dp.callback_query_handler(state=[WorkGraf.choice_time2])
 async def process_time2(callback_query: types.CallbackQuery, state: FSMContext):
-    async with state.proxy() as data:
-        end_time = callback_query.data
-        data['end_time'] = end_time
-        user_id_site = User.get(User.telegram_id == callback_query.from_user.id).site_user_id
-        print(user_id_site)
-        code = create_or_get_apport(date=data['date'], start_time=data['start_time'],
-                                    end_time=data['end_time'], user_id_site=user_id_site)
-        if code == 200:
-            await bot.send_message(callback_query.from_user.id, f'Запись на этот день уже есть')
-        elif code == 401:
-            await bot.send_message(callback_query.from_user.id, f'Запись создана')
-        elif code == 500:
-            await bot.send_message(callback_query.from_user.id, f'Ошибка')
-        await state.finish()
+    if callback_query.data == 'exit':
+        await back(callback_query, state)
+    else:
+        async with state.proxy() as data:
+            end_time = callback_query.data
+            data['end_time'] = end_time
+            print(data)
+            if int(data['end_time'].replace(':00', '')) < int(data['start_time'].replace(':00', '')):
+                await bot.send_message(callback_query.from_user.id,
+                                       'Время завершение не должно быть меньше времени начала!', reply_markup=menu)
+            else:
+                user_id_site = User.get(User.telegram_id == callback_query.from_user.id).site_user_id
+                code = create_or_get_apport(date=data['date'], start_time=data['start_time'],
+                                            end_time=data['end_time'], user_id_site=user_id_site)
+                if code == 200:
+                    await bot.send_message(callback_query.from_user.id, f'Запись на этот день уже есть')
+                elif code == 401:
+                    await bot.send_message(callback_query.from_user.id, f'Запись создана')
+                elif code == 500:
+                    await bot.send_message(callback_query.from_user.id, f'Ошибка')
+            await state.finish()
 
 
 @dp.callback_query_handler(state=[WorkGraf.delete_row])
 async def del_row(callback_query: types.CallbackQuery, state: FSMContext):
-    row_id = callback_query.data.split('_')[1]
-    user_id_site = User.get(User.telegram_id == callback_query.from_user.id).site_user_id
-    code = delete_appointments(user_id_site, row_id)
-    if code == 200:
-        await bot.send_message(callback_query.from_user.id, 'Запись удалена!')
+    if callback_query.data == 'exit':
+        await back(callback_query, state)
     else:
-        await bot.send_message(callback_query.from_user.id, 'Произошла ошибка!')
-    await state.finish()
+        row_id = callback_query.data.split('_')[1]
+        user_id_site = User.get(User.telegram_id == callback_query.from_user.id).site_user_id
+        code = delete_appointments(user_id_site, row_id)
+        if code == 200:
+            await bot.send_message(callback_query.from_user.id, 'Запись удалена!')
+        else:
+            await bot.send_message(callback_query.from_user.id, 'Произошла ошибка!')
+        await state.finish()
 
 
 @dp.callback_query_handler(state=[WorkList.choice_date])
 async def add_work(callback_query: types.CallbackQuery, state: FSMContext):
-    async with state.proxy() as data:
-        data['date'] = callback_query.data.split('_')[1]
-        work_list = get_works().get('data')
+    if callback_query.data == 'exit':
+        await back(callback_query, state)
+    else:
+        async with state.proxy() as data:
+            data['date'] = callback_query.data.split('_')[1]
+            work_list = get_works().get('data')
 
-        await bot.send_message(callback_query.from_user.id, 'Выберите работу:',
-                               reply_markup=generate_works(work_list))
-        await WorkList.choice_work.set()
+            await bot.send_message(callback_query.from_user.id, 'Выберите работу:',
+                                   reply_markup=generate_works(work_list))
+            await WorkList.choice_work.set()
 
 
 @dp.callback_query_handler(state=[WorkList.choice_work, WorkList.input_num])
-async def add_work(callback_query: types.CallbackQuery, state: FSMContext):
-    async with state.proxy() as data:
-        if callback_query.data == 'send':
-            date = data.get('date')
-            works = data.get('works')
-            user_id_site = User.get(User.telegram_id == callback_query.from_user.id).site_user_id
-            if post_works(date, user_id_site, works) == 200:
-                await bot.send_message(callback_query.from_user.id, 'Отправленно', reply_markup=menu)
+async def add_works(callback_query: types.CallbackQuery, state: FSMContext):
+    if callback_query.data == 'exit':
+        await back(callback_query, state)
+    else:
+        async with state.proxy() as data:
+            if callback_query.data == 'send':
+                date = data.get('date')
+                works = data.get('works')
+                if not works:
+                    await bot.send_message(callback_query.from_user.id, 'Вы ни чего не заполнил, чтобы отправлять',
+                                           reply_markup=menu)
+                else:
+                    user_id_site = User.get(User.telegram_id == callback_query.from_user.id).site_user_id
+                    if post_works(date, user_id_site, works) == 200:
+                        await bot.send_message(callback_query.from_user.id, 'Отправленно', reply_markup=menu)
+                    else:
+                        await bot.send_message(callback_query.from_user.id, 'Возникла ошибка')
+                await state.reset_state()
+                await state.finish()
             else:
-                await bot.send_message(callback_query.from_user.id, 'Возникла ошибка')
+                work_id = callback_query.data.split('_')
+                data['current_work'] = int(work_id[1])
+                await bot.send_message(callback_query.from_user.id,
+                                       f'Вы ввели вид работы: {work_id[0]}.\nТеперь введите количество:')
+                await WorkList.input_num.set()
+
+
+@dp.callback_query_handler(state=[ViewWorkList.view_work])
+async def view_work(callback_query: types.CallbackQuery, state: FSMContext):
+    if callback_query.data == 'exit':
+        await back(callback_query, state)
+    else:
+        work_id = callback_query.data.split('_')
+        is_checked = work_id[2]
+        data = get_details_works_lists(work_id[0]).get('data')
+        if isinstance(data, dict):
+            mes = f'{work_id[1]}\n'
+            mes += '✅Утверждено' if is_checked else '⛔️Не утверждено'
+            for key, value in data.items():
+                mes += f'\n{key} - {value}'
+            await bot.send_message(callback_query.from_user.id, mes)
         else:
-            work_id = callback_query.data.split('_')
-            data['current_work'] = int(work_id[1])
-            await bot.send_message(callback_query.from_user.id,
-                                   f'Вы ввели вид работы: {work_id[0]}.\nТеперь введите количество:')
-            await WorkList.input_num.set()
+            await bot.send_message(callback_query.from_user.id, data)
+

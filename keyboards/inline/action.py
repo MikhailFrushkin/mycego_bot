@@ -24,12 +24,17 @@ def generate_next_week_dates_keyboard():
         )
         keyboard.insert(button)
 
+    button = InlineKeyboardButton(
+        text='Назад',
+        callback_data='exit'
+    )
+    keyboard.insert(button)
     return keyboard
 
 
 # Функция для создания инлайн клавиатуры с числами от 9 до 20
 def generate_time_keyboard():
-    keyboard = InlineKeyboardMarkup(row_width=4)
+    keyboard = InlineKeyboardMarkup(row_width=6)
 
     for num in range(9, 21):
         button = InlineKeyboardButton(
@@ -42,7 +47,7 @@ def generate_time_keyboard():
 
 
 def generate_time_keyboard2():
-    keyboard = InlineKeyboardMarkup(row_width=4)
+    keyboard = InlineKeyboardMarkup(row_width=6)
 
     for num in range(10, 22):
         button = InlineKeyboardButton(
@@ -74,7 +79,7 @@ def generate_works(works_list):
 
 
 def generate_current_week_works_dates():
-    keyboard = InlineKeyboardMarkup(row_width=2)
+    keyboard = InlineKeyboardMarkup(row_width=1)
     today = datetime.date.today()
 
     # Найдем день недели для текущей даты (0 - понедельник, 6 - воскресенье)
@@ -94,4 +99,26 @@ def generate_current_week_works_dates():
         )
         keyboard.insert(button)
 
+    button = InlineKeyboardButton(
+        text='Назад',
+        callback_data='exit'
+    )
+    keyboard.insert(button)
+    return keyboard
+
+
+def create_works_list(lists):
+    keyboard = InlineKeyboardMarkup(row_width=1)
+
+    for i in lists:
+        button = InlineKeyboardButton(
+            text=str(i[1]),
+            callback_data=f"{i[0]}_{i[1]}_{i[2]}"
+        )
+        keyboard.insert(button)
+    button = InlineKeyboardButton(
+        text='Назад',
+        callback_data='exit'
+    )
+    keyboard.insert(button)
     return keyboard

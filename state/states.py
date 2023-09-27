@@ -1,3 +1,4 @@
+from aiogram import types
 from aiogram.dispatcher.filters.state import StatesGroup, State
 
 
@@ -18,3 +19,6 @@ class WorkList(StatesGroup):
     choice_work = State()
     input_num = State()
 
+
+class ViewWorkList(StatesGroup):
+    view_work = State()
