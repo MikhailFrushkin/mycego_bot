@@ -25,3 +25,11 @@ class Message(Model):
 
     class Meta:
         database = db
+
+
+class Works(Model):
+    id = CharField(unique=True)
+    name = CharField()
+
+    class Meta:
+        database = db

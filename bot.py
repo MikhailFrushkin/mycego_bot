@@ -4,7 +4,7 @@ from aiogram import executor
 from loguru import logger
 
 from data.config import path
-from data.db import db, User, Message
+from data.db import db, User, Message, Works
 from loader import dp
 from utils.notify_admins import on_startup_notify
 from utils.set_bot_commands import set_default_commands
@@ -18,7 +18,7 @@ async def on_startup(dp):
                rotation="5 MB")
     logger.info('Бот запускается')
     db.connect()
-    db.create_tables([User, Message], safe=True)
+    db.create_tables([User, Message, Works], safe=True)
     await set_default_commands(dp)
     await on_startup_notify(dp)
 

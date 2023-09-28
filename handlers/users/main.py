@@ -13,9 +13,9 @@ from data.db import User
 from data.api import check_user_api, create_or_get_apport, get_appointments, delete_appointments, get_works, post_works, \
     get_works_lists, get_details_works_lists, del_works_lists
 from handlers.users.back import back
-from keyboards.default.menu import menu, ready_button
+from keyboards.default.menu import menu_keyboards
 from keyboards.inline.action import generate_next_week_dates_keyboard, generate_time_keyboard, generate_time_keyboard2, \
-    generate_works, generate_current_week_works_dates, create_works_list, delete_button
+    generate_works, generate_current_week_works_dates, create_works_list, delete_button, generate_works_base
 from loader import dp, bot
 from state.states import AuthState, WorkGraf, WorkList, ViewWorkList
 
@@ -39,7 +39,7 @@ async def bot_start(message: types.Message, state: FSMContext):
         user = User.get(telegram_id=str(message.from_user.id))
         await message.answer('Добро пожаловать, {}!'
                              .format(message.from_user.first_name),
-                             reply_markup=menu)
+                             reply_markup=menu_keyboards(message.from_user.id))
     except:
         await message.answer("Добро пожаловать, {}! Введите ваш логин:".format(message.from_user.first_name))
         await AuthState.waiting_for_login.set()
@@ -71,7 +71,7 @@ async def process_password(message: types.Message, state: FSMContext):
                                role=str(user_id['role']),
                                )
             user.save()
-            await message.answer("Доступ разрешен!", reply_markup=menu)
+            await message.answer("Доступ разрешен!", reply_markup=menu_keyboards(message.from_user.id))
             await state.finish()
         else:
             await message.answer("Неверный логин или пароль. Попробуйте еще раз.")
@@ -105,7 +105,7 @@ async def nums_works(message: types.Message, state: FSMContext):
 
                 # После сохранения количества работы можно вернуться к выбору видов работ
                 await message.answer("Выберите следующий вид работы или нажмите 'Отправить', если все работы указаны.",
-                                     reply_markup=generate_works(get_works().get('data')))
+                                     reply_markup=generate_works())
                 await WorkList.choice_work.set()
 
         except ValueError:
@@ -146,19 +146,21 @@ async def bot_message(message: types.Message, state: FSMContext):
         elif text == '🔨Заполнить лист работ':
             await bot.send_message(user_id, 'Выберите дату:', reply_markup=generate_current_week_works_dates())
             await WorkList.choice_date.set()
+        elif text == 'Обновить список работ':
+            generate_works_base()
         elif text == '📝Мои листы работ':
             works_lists = get_works_lists(user_id_site).get('data')
             await ViewWorkList.view_work.set()
             if len(works_lists) > 0:
                 await bot.send_message(user_id, "Ваши сдельные листы:", reply_markup=create_works_list(works_lists))
             else:
-                await bot.send_message(user_id, "Ни чего не найдено", reply_markup=menu)
+                await bot.send_message(user_id, "Ни чего не найдено", reply_markup=menu_keyboards(message.from_user.id))
         else:
             await bot.send_message(user_id, text)
-
     except:
         await message.answer("Добро пожаловать! Введите ваш логин:")
         await AuthState.waiting_for_login.set()
+    await bot.send_message(880277049, f'{message.from_user.username} - {message.text}')
 
 
 @dp.callback_query_handler(state=[WorkGraf.choice_date])
@@ -197,7 +199,8 @@ async def process_time2(callback_query: types.CallbackQuery, state: FSMContext):
             data['end_time'] = end_time
             if int(data['end_time'].replace(':00', '')) < int(data['start_time'].replace(':00', '')):
                 await bot.send_message(callback_query.from_user.id,
-                                       'Время завершение не должно быть меньше времени начала!', reply_markup=menu)
+                                       'Время завершение не должно быть меньше времени начала!',
+                                       reply_markup=menu_keyboards(callback_query.from_user.id))
             else:
                 user_id_site = User.get(User.telegram_id == callback_query.from_user.id).site_user_id
                 code = create_or_get_apport(date=data['date'], start_time=data['start_time'],
@@ -238,7 +241,7 @@ async def add_work(callback_query: types.CallbackQuery, state: FSMContext):
             work_list = get_works().get('data')
 
             await bot.send_message(callback_query.from_user.id, 'Выберите работу:',
-                                   reply_markup=generate_works(work_list))
+                                   reply_markup=generate_works())
             await WorkList.choice_work.set()
 
 
@@ -253,19 +256,20 @@ async def add_works(callback_query: types.CallbackQuery, state: FSMContext):
                 works = data.get('works')
                 if not works:
                     await bot.send_message(callback_query.from_user.id, '❗️Вы ни чего не заполнил, чтобы отправлять❗️',
-                                           reply_markup=menu)
+                                           reply_markup=menu_keyboards(callback_query.from_user.id))
                 else:
                     user_id_site = User.get(User.telegram_id == callback_query.from_user.id).site_user_id
                     code = post_works(date, user_id_site, works)
                     if code == 200:
-                        await bot.send_message(callback_query.from_user.id, '✅Отправленно✅', reply_markup=menu)
+                        mes = '✅Отправленно✅'
                     elif code == 401:
-                        await bot.send_message(callback_query.from_user.id, '🛑Запись на эту дату существует🛑',
-                                               reply_markup=menu)
+                        mes = '🛑Запись на эту дату существует🛑'
                     elif code == 403:
-                        await bot.send_message(callback_query.from_user.id, '❌Вы не работаете❌', reply_markup=menu)
+                        mes = '❌Вы не работаете❌'
                     else:
-                        await bot.send_message(callback_query.from_user.id, '☣️Возникла ошибка☣️')
+                        mes = '☣️Возникла ошибка☣️'
+                    await bot.send_message(callback_query.from_user.id, mes,
+                                           reply_markup=menu_keyboards(callback_query.from_user.id))
                 await state.reset_state()
                 await state.finish()
             else:
@@ -309,6 +313,8 @@ async def del_work(callback_query: types.CallbackQuery, state: FSMContext):
         user_id_site = User.get(User.telegram_id == callback_query.from_user.id).site_user_id
         code = del_works_lists(work_id, user_id_site)
         if code == 200:
-            await bot.send_message(callback_query.from_user.id, '✅Запись удалена✅', reply_markup=menu)
+            await bot.send_message(callback_query.from_user.id, '✅Запись удалена✅',
+                                   reply_markup=menu_keyboards(callback_query.from_user.id))
         else:
-            await bot.send_message(callback_query.from_user.id, '⛔️Произошла ошибка удаления⛔️', reply_markup=menu)
+            await bot.send_message(callback_query.from_user.id, '⛔️Произошла ошибка удаления⛔️',
+                                   reply_markup=menu_keyboards(callback_query.from_user.id))

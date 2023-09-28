@@ -7,6 +7,6 @@ path = Path(__file__).resolve().parent.parent
 env = Env()
 env.read_env()
 
-BOT_TOKEN = env.str('BOT_TOKEN')
+BOT_TOKEN = env.str('BOT_TOKEN2')
 ADMINS = env.list('ADMINS')
-domain = 'https://mycego.ru'
+domain = 'http://127.0.0.1:8000'
