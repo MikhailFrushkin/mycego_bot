@@ -49,6 +49,7 @@ def post_works(date, user_id_site, works):
     json_data = json.dumps(data)
     headers = {'Content-Type': 'application/json'}
     response = requests.post(url, data=json_data, headers=headers)
+    print(response.status_code)
     return response.status_code
 
 
@@ -68,6 +69,15 @@ def get_details_works_lists(work_id):
     headers = {'Content-Type': 'application/json'}
     response = requests.get(url, data=json_data, headers=headers)
     return response.json()
+
+
+def del_works_lists(work_id, user_id):
+    url = f'{domain}/api-auth/view_detail_work/'
+    data = {'work_id': work_id, 'user_id': user_id}
+    json_data = json.dumps(data)
+    headers = {'Content-Type': 'application/json'}
+    response = requests.post(url, data=json_data, headers=headers)
+    return response.status_code
 
 
 if __name__ == '__main__':

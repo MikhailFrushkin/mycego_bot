@@ -11,11 +11,11 @@ import bot
 from data.config import path
 from data.db import User
 from data.api import check_user_api, create_or_get_apport, get_appointments, delete_appointments, get_works, post_works, \
-    get_works_lists, get_details_works_lists
+    get_works_lists, get_details_works_lists, del_works_lists
 from handlers.users.back import back
 from keyboards.default.menu import menu, ready_button
 from keyboards.inline.action import generate_next_week_dates_keyboard, generate_time_keyboard, generate_time_keyboard2, \
-    generate_works, generate_current_week_works_dates, create_works_list
+    generate_works, generate_current_week_works_dates, create_works_list, delete_button
 from loader import dp, bot
 from state.states import AuthState, WorkGraf, WorkList, ViewWorkList
 
@@ -137,7 +137,7 @@ async def bot_message(message: types.Message, state: FSMContext):
                                f'по {item[2].replace(":00:00", ":00")} \n{verified}'
 
                 keyboard = types.InlineKeyboardMarkup()
-                delete_button = types.InlineKeyboardButton("Удалить", callback_data=f"delete_{item[4]}")
+                delete_button = types.InlineKeyboardButton("🚫Удалить", callback_data=f"delete_{item[4]}")
                 keyboard.add(delete_button)
                 if item[3]:
                     await bot.send_message(user_id, message_text)
@@ -169,7 +169,8 @@ async def process_date(callback_query: types.CallbackQuery, state: FSMContext):
         else:
             date = callback_query.data.split('_')[1]
             data['date'] = date
-            await bot.send_message(callback_query.from_user.id, 'Выберите время с:', reply_markup=generate_time_keyboard())
+            await bot.send_message(callback_query.from_user.id, 'Выберите время с:',
+                                   reply_markup=generate_time_keyboard())
             await WorkGraf.choice_time.set()
 
 
@@ -194,7 +195,6 @@ async def process_time2(callback_query: types.CallbackQuery, state: FSMContext):
         async with state.proxy() as data:
             end_time = callback_query.data
             data['end_time'] = end_time
-            print(data)
             if int(data['end_time'].replace(':00', '')) < int(data['start_time'].replace(':00', '')):
                 await bot.send_message(callback_query.from_user.id,
                                        'Время завершение не должно быть меньше времени начала!', reply_markup=menu)
@@ -202,12 +202,14 @@ async def process_time2(callback_query: types.CallbackQuery, state: FSMContext):
                 user_id_site = User.get(User.telegram_id == callback_query.from_user.id).site_user_id
                 code = create_or_get_apport(date=data['date'], start_time=data['start_time'],
                                             end_time=data['end_time'], user_id_site=user_id_site)
-                if code == 200:
-                    await bot.send_message(callback_query.from_user.id, f'Запись на этот день уже есть')
-                elif code == 401:
-                    await bot.send_message(callback_query.from_user.id, f'Запись создана')
+                if code == 401:
+                    await bot.send_message(callback_query.from_user.id, f'🛑Запись на этот день уже есть🛑')
+                elif code == 200:
+                    await bot.send_message(callback_query.from_user.id, f'✅Запись создана✅')
+                elif code == 403:
+                    await bot.send_message(callback_query.from_user.id, f'❌Вы не работаете❌')
                 elif code == 500:
-                    await bot.send_message(callback_query.from_user.id, f'Ошибка')
+                    await bot.send_message(callback_query.from_user.id, f'☣️Ошибка☣️')
             await state.finish()
 
 
@@ -220,9 +222,9 @@ async def del_row(callback_query: types.CallbackQuery, state: FSMContext):
         user_id_site = User.get(User.telegram_id == callback_query.from_user.id).site_user_id
         code = delete_appointments(user_id_site, row_id)
         if code == 200:
-            await bot.send_message(callback_query.from_user.id, 'Запись удалена!')
+            await bot.send_message(callback_query.from_user.id, '✅Запись удалена!✅')
         else:
-            await bot.send_message(callback_query.from_user.id, 'Произошла ошибка!')
+            await bot.send_message(callback_query.from_user.id, '☣️Произошла ошибка!☣️')
         await state.finish()
 
 
@@ -250,14 +252,20 @@ async def add_works(callback_query: types.CallbackQuery, state: FSMContext):
                 date = data.get('date')
                 works = data.get('works')
                 if not works:
-                    await bot.send_message(callback_query.from_user.id, 'Вы ни чего не заполнил, чтобы отправлять',
+                    await bot.send_message(callback_query.from_user.id, '❗️Вы ни чего не заполнил, чтобы отправлять❗️',
                                            reply_markup=menu)
                 else:
                     user_id_site = User.get(User.telegram_id == callback_query.from_user.id).site_user_id
-                    if post_works(date, user_id_site, works) == 200:
-                        await bot.send_message(callback_query.from_user.id, 'Отправленно', reply_markup=menu)
+                    code = post_works(date, user_id_site, works)
+                    if code == 200:
+                        await bot.send_message(callback_query.from_user.id, '✅Отправленно✅', reply_markup=menu)
+                    elif code == 401:
+                        await bot.send_message(callback_query.from_user.id, '🛑Запись на эту дату существует🛑',
+                                               reply_markup=menu)
+                    elif code == 403:
+                        await bot.send_message(callback_query.from_user.id, '❌Вы не работаете❌', reply_markup=menu)
                     else:
-                        await bot.send_message(callback_query.from_user.id, 'Возникла ошибка')
+                        await bot.send_message(callback_query.from_user.id, '☣️Возникла ошибка☣️')
                 await state.reset_state()
                 await state.finish()
             else:
@@ -278,10 +286,29 @@ async def view_work(callback_query: types.CallbackQuery, state: FSMContext):
         data = get_details_works_lists(work_id[0]).get('data')
         if isinstance(data, dict):
             mes = f'{work_id[1]}\n'
-            mes += '✅Утверждено' if is_checked else '⛔️Не утверждено'
+            mes += '✅Утверждено' if is_checked == 'True' else '⛔️Не утверждено'
             for key, value in data.items():
                 mes += f'\n{key} - {value}'
-            await bot.send_message(callback_query.from_user.id, mes)
+            if not is_checked == 'True':
+                await bot.send_message(callback_query.from_user.id, mes, reply_markup=delete_button(work_id[0]))
+                await ViewWorkList.del_work.set()
+            else:
+                await bot.send_message(callback_query.from_user.id, mes)
+
         else:
             await bot.send_message(callback_query.from_user.id, data)
 
+
+@dp.callback_query_handler(state=[ViewWorkList.del_work])
+async def del_work(callback_query: types.CallbackQuery, state: FSMContext):
+    if callback_query.data == 'exit':
+        await back(callback_query, state)
+    else:
+        print(callback_query.data)
+        work_id = int(callback_query.data.split('_')[1])
+        user_id_site = User.get(User.telegram_id == callback_query.from_user.id).site_user_id
+        code = del_works_lists(work_id, user_id_site)
+        if code == 200:
+            await bot.send_message(callback_query.from_user.id, '✅Запись удалена✅', reply_markup=menu)
+        else:
+            await bot.send_message(callback_query.from_user.id, '⛔️Произошла ошибка удаления⛔️', reply_markup=menu)

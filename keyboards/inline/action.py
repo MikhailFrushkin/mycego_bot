@@ -70,7 +70,7 @@ def generate_works(works_list):
         keyboard.insert(button)
 
     button = InlineKeyboardButton(
-        text='Отправить',
+        text='📬Отправить',
         callback_data="send"
     )
     keyboard.insert(button)
@@ -119,6 +119,16 @@ def create_works_list(lists):
     button = InlineKeyboardButton(
         text='Назад',
         callback_data='exit'
+    )
+    keyboard.insert(button)
+    return keyboard
+
+
+def delete_button(data):
+    keyboard = InlineKeyboardMarkup(row_width=1)
+    button = InlineKeyboardButton(
+        text='Удалить',
+        callback_data=f'del_{data}'
     )
     keyboard.insert(button)
     return keyboard

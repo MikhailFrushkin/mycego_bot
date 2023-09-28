@@ -22,3 +22,4 @@ class WorkList(StatesGroup):
 
 class ViewWorkList(StatesGroup):
     view_work = State()
+    del_work = State()
