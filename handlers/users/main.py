@@ -1,5 +1,6 @@
 import ast
 import json
+import os
 import random
 
 from aiogram import types
@@ -31,8 +32,10 @@ async def bot_start(message: types.Message, state: FSMContext):
         message.from_user.username,
         message.text
     ))
-    hello = ['limur.tgs', 'Dicaprio.tgs', 'hello.tgs', 'hello2.tgs', 'hello3.tgs']
-    sticker = open('{}/stikers/{}'.format(path, random.choice(hello)), 'rb')
+    await back(message, state)
+
+    hello = os.listdir('stickers')
+    sticker = open('{}/stickers/{}'.format(path, random.choice(hello)), 'rb')
     await bot.send_sticker(message.chat.id, sticker)
 
     try:
@@ -104,8 +107,10 @@ async def nums_works(message: types.Message, state: FSMContext):
                 await message.answer(f"Вы указали {quantity} единиц работы.")
 
                 # После сохранения количества работы можно вернуться к выбору видов работ
-                await message.answer("Выберите следующий вид работы или нажмите 'Отправить', если все работы указаны.",
-                                     reply_markup=generate_works())
+                mes = await message.answer(
+                    "Выберите следующий вид работы или нажмите 'Отправить', если все работы указаны.",
+                    reply_markup=generate_works())
+                data['mes'] = mes
                 await WorkList.choice_work.set()
 
         except ValueError:
@@ -132,7 +137,6 @@ async def bot_message(message: types.Message, state: FSMContext):
             await WorkGraf.delete_row.set()
             for index, item in enumerate(ap_list, start=1):
                 verified = '✅Утверждено' if item[3] else '⛔️Не утверждено'
-                # Формируем текст сообщения
                 message_text = f'{index}. {item[0]} с {item[1].replace(":00:00", ":00")} ' \
                                f'по {item[2].replace(":00:00", ":00")} \n{verified}'
 
@@ -144,15 +148,22 @@ async def bot_message(message: types.Message, state: FSMContext):
                 else:
                     await bot.send_message(user_id, message_text, reply_markup=keyboard)
         elif text == '🔨Заполнить лист работ':
-            await bot.send_message(user_id, 'Выберите дату:', reply_markup=generate_current_week_works_dates())
-            await WorkList.choice_date.set()
+            async with state.proxy() as data:
+                mes = await bot.send_message(user_id, 'Выберите дату:',
+                                             reply_markup=generate_current_week_works_dates())
+                data['mes'] = mes
+                await WorkList.choice_date.set()
         elif text == 'Обновить список работ':
             generate_works_base()
         elif text == '📝Мои листы работ':
             works_lists = get_works_lists(user_id_site).get('data')
-            await ViewWorkList.view_work.set()
             if len(works_lists) > 0:
-                await bot.send_message(user_id, "Ваши сдельные листы:", reply_markup=create_works_list(works_lists))
+                async with state.proxy() as data:
+                    mes = await bot.send_message(user_id, "Ваши сдельные листы:",
+                                                 reply_markup=create_works_list(works_lists))
+                    data['mes'] = mes
+                    await ViewWorkList.view_work.set()
+
             else:
                 await bot.send_message(user_id, "Ни чего не найдено", reply_markup=menu_keyboards(message.from_user.id))
         else:
@@ -160,7 +171,10 @@ async def bot_message(message: types.Message, state: FSMContext):
     except:
         await message.answer("Добро пожаловать! Введите ваш логин:")
         await AuthState.waiting_for_login.set()
-    await bot.send_message(880277049, f'{message.from_user.username} - {message.text}')
+    await bot.send_message(880277049,
+                           f'{message.from_user.username} '
+                           f'{message.from_user.first_name} '
+                           f'{message.from_user.last_name} - {message.text}')
 
 
 @dp.callback_query_handler(state=[WorkGraf.choice_date])
@@ -237,11 +251,12 @@ async def add_work(callback_query: types.CallbackQuery, state: FSMContext):
         await back(callback_query, state)
     else:
         async with state.proxy() as data:
-            data['date'] = callback_query.data.split('_')[1]
-            work_list = get_works().get('data')
-
-            await bot.send_message(callback_query.from_user.id, 'Выберите работу:',
-                                   reply_markup=generate_works())
+            await bot.delete_message(chat_id=callback_query.from_user.id, message_id=data['mes'].message_id)
+            date = callback_query.data.split('_')[1]
+            data['date'] = date
+            mes = await bot.send_message(callback_query.from_user.id, f'{date}\nВыберите работу:',
+                                         reply_markup=generate_works())
+            data['mes'] = mes
             await WorkList.choice_work.set()
 
 
@@ -251,6 +266,7 @@ async def add_works(callback_query: types.CallbackQuery, state: FSMContext):
         await back(callback_query, state)
     else:
         async with state.proxy() as data:
+            await bot.delete_message(chat_id=callback_query.from_user.id, message_id=data['mes'].message_id)
             if callback_query.data == 'send':
                 date = data.get('date')
                 works = data.get('works')
@@ -285,22 +301,25 @@ async def view_work(callback_query: types.CallbackQuery, state: FSMContext):
     if callback_query.data == 'exit':
         await back(callback_query, state)
     else:
-        work_id = callback_query.data.split('_')
-        is_checked = work_id[2]
-        data = get_details_works_lists(work_id[0]).get('data')
-        if isinstance(data, dict):
-            mes = f'{work_id[1]}\n'
-            mes += '✅Утверждено' if is_checked == 'True' else '⛔️Не утверждено'
-            for key, value in data.items():
-                mes += f'\n{key} - {value}'
-            if not is_checked == 'True':
-                await bot.send_message(callback_query.from_user.id, mes, reply_markup=delete_button(work_id[0]))
-                await ViewWorkList.del_work.set()
-            else:
-                await bot.send_message(callback_query.from_user.id, mes)
+        async with state.proxy() as data:
+            await bot.delete_message(chat_id=callback_query.from_user.id, message_id=data['mes'].message_id)
 
-        else:
-            await bot.send_message(callback_query.from_user.id, data)
+            work_id = callback_query.data.split('_')
+            is_checked = work_id[2]
+            data = get_details_works_lists(work_id[0]).get('data')
+            if isinstance(data, dict):
+                mes = f'{work_id[1]}\n'
+                mes += '✅Утверждено' if is_checked == 'True' else '⛔️Не утверждено'
+                for key, value in data.items():
+                    mes += f'\n{key} - {value}'
+                if not is_checked == 'True':
+                    await bot.send_message(callback_query.from_user.id, mes, reply_markup=delete_button(work_id[0]))
+                    await ViewWorkList.del_work.set()
+                else:
+                    await bot.send_message(callback_query.from_user.id, mes)
+
+            else:
+                await bot.send_message(callback_query.from_user.id, data)
 
 
 @dp.callback_query_handler(state=[ViewWorkList.del_work])

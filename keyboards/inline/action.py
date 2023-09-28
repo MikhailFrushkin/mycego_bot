@@ -142,10 +142,16 @@ def create_works_list(lists):
 
 
 def delete_button(data):
-    keyboard = InlineKeyboardMarkup(row_width=1)
+    keyboard = InlineKeyboardMarkup(row_width=2)
     button = InlineKeyboardButton(
         text='Удалить',
         callback_data=f'del_{data}'
+    )
+    keyboard.insert(button)
+
+    button = InlineKeyboardButton(
+        text='Назад',
+        callback_data='exit'
     )
     keyboard.insert(button)
     return keyboard
