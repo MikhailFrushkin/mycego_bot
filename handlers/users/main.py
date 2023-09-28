@@ -272,7 +272,7 @@ async def add_works(callback_query: types.CallbackQuery, state: FSMContext):
                 work_id = callback_query.data.split('_')
                 data['current_work'] = int(work_id[1])
                 await bot.send_message(callback_query.from_user.id,
-                                       f'Вы ввели вид работы: {work_id[0]}.\nТеперь введите количество:')
+                                       f'Теперь введите количество:')
                 await WorkList.input_num.set()
 
 

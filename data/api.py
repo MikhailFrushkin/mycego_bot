@@ -9,6 +9,7 @@ def check_user_api(username, password):
     url = f'{domain}/api-auth/login/'
     data = {'username': username, 'password': password}
     response = requests.post(url, data=data)
+    print(response.status_code)
     if response.status_code == 200:
         return response.json()
     return None

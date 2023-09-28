@@ -2,6 +2,8 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 import datetime
 
+from loguru import logger
+
 
 def generate_next_week_dates_keyboard():
     keyboard = InlineKeyboardMarkup(row_width=2)
@@ -61,14 +63,15 @@ def generate_time_keyboard2():
 
 def generate_works(works_list):
     keyboard = InlineKeyboardMarkup(row_width=2)
-
     for i in works_list:
-        button = InlineKeyboardButton(
-            text=str(i[1]),
-            callback_data=f"{i[1]}_{i[0]}"
-        )
-        keyboard.insert(button)
-
+        try:
+            button = InlineKeyboardButton(
+                text=str(i[1]),
+                callback_data=f"{i[0]}_{i[0]}"
+            )
+            keyboard.insert(button)
+        except:
+            logger.error(i)
     button = InlineKeyboardButton(
         text='📬Отправить',
         callback_data="send"
@@ -93,11 +96,12 @@ def generate_current_week_works_dates():
 
     for i in range(7):
         date = next_week_start + datetime.timedelta(days=i)
-        button = InlineKeyboardButton(
-            text=date.strftime("%Y-%m-%d"),
-            callback_data=f"date_{date.strftime('%Y-%m-%d')}"
-        )
-        keyboard.insert(button)
+        if date <= today:
+            button = InlineKeyboardButton(
+                text=date.strftime("%Y-%m-%d"),
+                callback_data=f"date_{date.strftime('%Y-%m-%d')}"
+            )
+            keyboard.insert(button)
 
     button = InlineKeyboardButton(
         text='Назад',
