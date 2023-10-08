@@ -168,13 +168,13 @@ async def bot_message(message: types.Message, state: FSMContext):
                 await bot.send_message(user_id, "Ни чего не найдено", reply_markup=menu_keyboards(message.from_user.id))
         else:
             await bot.send_message(user_id, text)
+
+        await bot.send_message(880277049,
+                               f'{user.username} - {message.text}')
     except:
         await message.answer("Добро пожаловать! Введите ваш логин:")
         await AuthState.waiting_for_login.set()
-    await bot.send_message(880277049,
-                           f'{message.from_user.username} '
-                           f'{message.from_user.first_name} '
-                           f'{message.from_user.last_name} - {message.text}')
+
 
 
 @dp.callback_query_handler(state=[WorkGraf.choice_date])

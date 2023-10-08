@@ -97,18 +97,9 @@ def generate_works():
 def generate_current_week_works_dates():
     keyboard = InlineKeyboardMarkup(row_width=1)
     today = datetime.date.today()
-
-    # Найдем день недели для текущей даты (0 - понедельник, 6 - воскресенье)
-    current_weekday = today.weekday()
-
-    # Вычисляем разницу дней для начала следующей недели (пн)
-    days_until_next_monday = (7 - current_weekday) % 7
-
-    # Вычисляем дату начала следующей недели
-    next_week_start = today + datetime.timedelta(days=days_until_next_monday - 7)
-
+    start = today - datetime.timedelta(days=6)
     for i in range(7):
-        date = next_week_start + datetime.timedelta(days=i)
+        date = start + datetime.timedelta(days=i)
         if date <= today:
             button = InlineKeyboardButton(
                 text=date.strftime("%Y-%m-%d"),
