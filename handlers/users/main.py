@@ -327,7 +327,6 @@ async def del_work(callback_query: types.CallbackQuery, state: FSMContext):
     if callback_query.data == 'exit':
         await back(callback_query, state)
     else:
-        print(callback_query.data)
         work_id = int(callback_query.data.split('_')[1])
         user_id_site = User.get(User.telegram_id == callback_query.from_user.id).site_user_id
         code = del_works_lists(work_id, user_id_site)

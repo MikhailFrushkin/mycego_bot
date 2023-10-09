@@ -12,14 +12,8 @@ def generate_next_week_dates_keyboard():
     keyboard = InlineKeyboardMarkup(row_width=2)
     today = datetime.date.today()
 
-    # Найдем день недели для текущей даты (0 - понедельник, 6 - воскресенье)
-    current_weekday = today.weekday()
-
-    # Вычисляем разницу дней для начала следующей недели (пн)
-    days_until_next_monday = (7 - current_weekday) % 7
-
     # Вычисляем дату начала следующей недели
-    next_week_start = today + datetime.timedelta(days=days_until_next_monday - 7)
+    next_week_start = today - datetime.timedelta(days=7)
 
     for i in range(14):
         date = next_week_start + datetime.timedelta(days=i)
