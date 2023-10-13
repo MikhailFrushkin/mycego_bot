@@ -1,4 +1,4 @@
-from peewee import Model, CharField, ForeignKeyField
+from peewee import Model, CharField, ForeignKeyField, BooleanField
 from playhouse.sqlite_ext import SqliteDatabase
 
 # Инициализируйте базу данных SQLite
@@ -30,6 +30,7 @@ class Message(Model):
 class Works(Model):
     id = CharField(unique=True)
     name = CharField()
+    delivery = BooleanField(default=False)
 
     class Meta:
         database = db

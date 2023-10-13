@@ -20,6 +20,13 @@ class WorkList(StatesGroup):
     input_num = State()
 
 
+class WorkListDelivery(StatesGroup):
+    choice_date = State()
+    choice_delivery = State()
+    choice_work = State()
+    input_num = State()
+
+
 class ViewWorkList(StatesGroup):
     view_work = State()
     del_work = State()

@@ -4,7 +4,7 @@ import datetime
 
 from loguru import logger
 
-from data.api import get_works
+from data.api import get_works, get_delivery
 from data.db import Works
 
 
@@ -62,12 +62,16 @@ def generate_works_base():
     data = get_works().get('data')
     if data:
         Works.delete().execute()
+        logger.success(data)
         for i in data:
-            new_work = Works.create(id=i[0], name=i[1])
+            new_work = Works.create(id=i[0], name=i[1], delivery=i[2])
 
 
-def generate_works():
-    all_works = Works.select()
+def generate_works(delivery=None):
+    if delivery:
+        all_works = Works.filter(delivery=True)
+    else:
+        all_works = Works.select()
 
     keyboard = InlineKeyboardMarkup(row_width=2)
     for i in all_works:
@@ -134,6 +138,23 @@ def delete_button(data):
     )
     keyboard.insert(button)
 
+    button = InlineKeyboardButton(
+        text='Назад',
+        callback_data='exit'
+    )
+    keyboard.insert(button)
+    return keyboard
+
+
+def delivery_keyboard():
+    data = get_delivery()
+    keyboard = InlineKeyboardMarkup(row_width=2)
+    for i in data:
+        button = InlineKeyboardButton(
+            text=str(i[1]),
+            callback_data=f"{i[0]}"
+        )
+        keyboard.insert(button)
     button = InlineKeyboardButton(
         text='Назад',
         callback_data='exit'

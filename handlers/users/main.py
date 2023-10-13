@@ -12,13 +12,14 @@ import bot
 from data.config import path
 from data.db import User
 from data.api import check_user_api, create_or_get_apport, get_appointments, delete_appointments, get_works, post_works, \
-    get_works_lists, get_details_works_lists, del_works_lists
+    get_works_lists, get_details_works_lists, del_works_lists, get_data_delivery
 from handlers.users.back import back
 from keyboards.default.menu import menu_keyboards
 from keyboards.inline.action import generate_next_week_dates_keyboard, generate_time_keyboard, generate_time_keyboard2, \
-    generate_works, generate_current_week_works_dates, create_works_list, delete_button, generate_works_base
+    generate_works, generate_current_week_works_dates, create_works_list, delete_button, generate_works_base, \
+    delivery_keyboard
 from loader import dp, bot
-from state.states import AuthState, WorkGraf, WorkList, ViewWorkList
+from state.states import AuthState, WorkGraf, WorkList, ViewWorkList, WorkListDelivery
 
 
 @dp.message_handler(commands=['start'], state='*')
@@ -117,6 +118,36 @@ async def nums_works(message: types.Message, state: FSMContext):
             await message.answer("Ошибка: введите число, пожалуйста.")
 
 
+@dp.message_handler(state=WorkListDelivery.input_num)
+async def nums_works(message: types.Message, state: FSMContext):
+    async with state.proxy() as data:
+        current_work = data.get('current_work')
+        if current_work is None:
+            await message.answer("Ошибка: вид работы не указан. Пожалуйста, выберите вид работы сначала.")
+            return
+
+        try:
+            quantity = int(message.text)
+            if quantity < 0:
+                await message.answer("Ошибка: количество не может быть отрицательным.")
+            else:
+                if 'works' not in data:
+                    data['works'] = {}  # Создаем словарь для хранения видов работ и их количества
+
+                data['works'][current_work] = quantity  # Сохраняем количество работы в словарь
+                await message.answer(f"Вы указали {quantity} единиц работы.")
+
+                # После сохранения количества работы можно вернуться к выбору видов работ
+                mes = await message.answer(
+                    "Выберите следующий вид работы или нажмите 'Отправить', если все работы указаны.",
+                    reply_markup=generate_works(delivery=True))
+                data['mes'] = mes
+                await WorkListDelivery.choice_work.set()
+
+        except ValueError:
+            await message.answer("Ошибка: введите число, пожалуйста.")
+
+
 @dp.message_handler(content_types=['text'], state='*')
 async def bot_message(message: types.Message, state: FSMContext):
     try:
@@ -147,15 +178,14 @@ async def bot_message(message: types.Message, state: FSMContext):
                     await bot.send_message(user_id, message_text)
                 else:
                     await bot.send_message(user_id, message_text, reply_markup=keyboard)
-        elif text == '🔨Заполнить лист работ':
+        elif text == '🔨Заполнить лист работ на день':
             async with state.proxy() as data:
                 mes = await bot.send_message(user_id, 'Выберите дату:',
                                              reply_markup=generate_current_week_works_dates())
                 data['mes'] = mes
                 await WorkList.choice_date.set()
-        elif text == 'Обновить список работ':
-            generate_works_base()
-        elif text == '📝Мои листы работ':
+
+        elif text == '📝Мои листы работ за день':
             works_lists = get_works_lists(user_id_site).get('data')
             if len(works_lists) > 0:
                 async with state.proxy() as data:
@@ -166,15 +196,39 @@ async def bot_message(message: types.Message, state: FSMContext):
 
             else:
                 await bot.send_message(user_id, "Ни чего не найдено", reply_markup=menu_keyboards(message.from_user.id))
+        elif text == '🛠️Заполнить работы по поставке':
+            async with state.proxy() as data:
+                mes = await bot.send_message(user_id, 'Выберите дату:',
+                                             reply_markup=generate_current_week_works_dates())
+                data['mes'] = mes
+                await WorkListDelivery.choice_date.set()
+        elif text == '📦Мои поставки':
+            await bot.send_message(user_id, "Ваши сдельные листы на поставки за неделю:",
+                                         reply_markup=menu_keyboards(message.from_user.id))
+            user_id_site = User.get(User.telegram_id == message.from_user.id).site_user_id
+            data_delivery = get_data_delivery(user_id_site).get('data', None)
+            if data_delivery:
+                message_bot = ''
+                for key, value in data_delivery.items():
+                    message_bot += f"\n{key}\n"
+                    for i, j in value.items():
+                        message_bot += f'    {i}: {j}\n'
+                await bot.send_message(user_id, message_bot)
+            else:
+                await bot.send_message(user_id, "Не найдено за неделю",
+                                       reply_markup=menu_keyboards(message.from_user.id))
+        elif text == 'Обновить список работ':
+            generate_works_base()
         else:
             await bot.send_message(user_id, text)
 
         await bot.send_message(880277049,
                                f'{user.username} - {message.text}')
-    except:
-        await message.answer("Добро пожаловать! Введите ваш логин:")
-        await AuthState.waiting_for_login.set()
-
+    except Exception as ex:
+        logger.error(ex)
+        await back(message, state)
+        # await message.answer("Добро пожаловать! Введите ваш логин:")
+        # await AuthState.waiting_for_login.set()
 
 
 @dp.callback_query_handler(state=[WorkGraf.choice_date])
@@ -246,7 +300,7 @@ async def del_row(callback_query: types.CallbackQuery, state: FSMContext):
 
 
 @dp.callback_query_handler(state=[WorkList.choice_date])
-async def add_work(callback_query: types.CallbackQuery, state: FSMContext):
+async def add_work_list(callback_query: types.CallbackQuery, state: FSMContext):
     if callback_query.data == 'exit':
         await back(callback_query, state)
     else:
@@ -336,3 +390,70 @@ async def del_work(callback_query: types.CallbackQuery, state: FSMContext):
         else:
             await bot.send_message(callback_query.from_user.id, '⛔️Произошла ошибка удаления⛔️',
                                    reply_markup=menu_keyboards(callback_query.from_user.id))
+
+
+@dp.callback_query_handler(state=[WorkListDelivery.choice_date])
+async def add_delivery_date(callback_query: types.CallbackQuery, state: FSMContext):
+    if callback_query.data == 'exit':
+        await back(callback_query, state)
+    else:
+        async with state.proxy() as data:
+            await bot.delete_message(chat_id=callback_query.from_user.id, message_id=data['mes'].message_id)
+            date = callback_query.data.split('_')[1]
+            data['date'] = date
+            mes = await bot.send_message(callback_query.from_user.id, f'{date}\nВыберите поставку:',
+                                         reply_markup=delivery_keyboard())
+            data['mes'] = mes
+            await WorkListDelivery.choice_delivery.set()
+
+
+@dp.callback_query_handler(state=[WorkListDelivery.choice_delivery])
+async def add_delivery_work(callback_query: types.CallbackQuery, state: FSMContext):
+    if callback_query.data == 'exit':
+        await back(callback_query, state)
+    else:
+        async with state.proxy() as data:
+            data['delivery_id'] = callback_query.data
+            await bot.delete_message(chat_id=callback_query.from_user.id, message_id=data['mes'].message_id)
+            mes = await bot.send_message(callback_query.from_user.id, f'\nВыберите работу:',
+                                         reply_markup=generate_works(delivery=True))
+            data['mes'] = mes
+            await WorkListDelivery.choice_work.set()
+
+
+@dp.callback_query_handler(state=[WorkListDelivery.choice_work, WorkListDelivery.input_num])
+async def add_works_delivery(callback_query: types.CallbackQuery, state: FSMContext):
+    if callback_query.data == 'exit':
+        await back(callback_query, state)
+    else:
+        async with state.proxy() as data:
+            await bot.delete_message(chat_id=callback_query.from_user.id, message_id=data['mes'].message_id)
+            if callback_query.data == 'send':
+                date = data.get('date')
+                works = data.get('works')
+                delivery = data.get('delivery_id')
+
+                if not works:
+                    await bot.send_message(callback_query.from_user.id, '❗️Вы ни чего не заполнил, чтобы отправлять❗️',
+                                           reply_markup=menu_keyboards(callback_query.from_user.id))
+                else:
+                    user_id_site = User.get(User.telegram_id == callback_query.from_user.id).site_user_id
+                    code = post_works(date, user_id_site, works, delivery)
+                    if code == 200:
+                        mes = '✅Отправленно✅'
+                    elif code == 401:
+                        mes = '🛑Запись на эту дату существует🛑'
+                    elif code == 403:
+                        mes = '❌Вы не работаете❌'
+                    else:
+                        mes = '☣️Возникла ошибка☣️'
+                    await bot.send_message(callback_query.from_user.id, mes,
+                                           reply_markup=menu_keyboards(callback_query.from_user.id))
+                await state.reset_state()
+                await state.finish()
+            else:
+                work_id = callback_query.data.split('_')
+                data['current_work'] = int(work_id[1])
+                await bot.send_message(callback_query.from_user.id,
+                                       f'Теперь введите количество:')
+                await WorkListDelivery.input_num.set()
