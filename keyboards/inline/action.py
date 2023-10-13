@@ -161,3 +161,11 @@ def delivery_keyboard():
     )
     keyboard.insert(button)
     return keyboard
+
+
+call_back = InlineKeyboardMarkup(row_width=2)
+button = InlineKeyboardButton(
+    text='Выйти',
+    callback_data='exit'
+)
+call_back.insert(button)

@@ -17,7 +17,7 @@ from handlers.users.back import back
 from keyboards.default.menu import menu_keyboards
 from keyboards.inline.action import generate_next_week_dates_keyboard, generate_time_keyboard, generate_time_keyboard2, \
     generate_works, generate_current_week_works_dates, create_works_list, delete_button, generate_works_base, \
-    delivery_keyboard
+    delivery_keyboard, call_back
 from loader import dp, bot
 from state.states import AuthState, WorkGraf, WorkList, ViewWorkList, WorkListDelivery
 
@@ -115,7 +115,7 @@ async def nums_works(message: types.Message, state: FSMContext):
                 await WorkList.choice_work.set()
 
         except ValueError:
-            await message.answer("Ошибка: введите число, пожалуйста.")
+            await message.answer("Ошибка: введите число, пожалуйста.", reply_markup=call_back)
 
 
 @dp.message_handler(state=WorkListDelivery.input_num)
@@ -145,7 +145,7 @@ async def nums_works(message: types.Message, state: FSMContext):
                 await WorkListDelivery.choice_work.set()
 
         except ValueError:
-            await message.answer("Ошибка: введите число, пожалуйста.")
+            await message.answer("Ошибка: введите число, пожалуйста.", reply_markup=call_back)
 
 
 @dp.message_handler(content_types=['text'], state='*')
@@ -204,7 +204,7 @@ async def bot_message(message: types.Message, state: FSMContext):
                 await WorkListDelivery.choice_date.set()
         elif text == '📦Мои поставки':
             await bot.send_message(user_id, "Ваши сдельные листы на поставки за неделю:",
-                                         reply_markup=menu_keyboards(message.from_user.id))
+                                   reply_markup=menu_keyboards(message.from_user.id))
             user_id_site = User.get(User.telegram_id == message.from_user.id).site_user_id
             data_delivery = get_data_delivery(user_id_site).get('data', None)
             if data_delivery:
@@ -457,3 +457,9 @@ async def add_works_delivery(callback_query: types.CallbackQuery, state: FSMCont
                 await bot.send_message(callback_query.from_user.id,
                                        f'Теперь введите количество:')
                 await WorkListDelivery.input_num.set()
+
+
+@dp.callback_query_handler(state='*')
+async def add_works_delivery(callback_query: types.CallbackQuery, state: FSMContext):
+    if callback_query.data == 'exit':
+        await back(callback_query, state)
