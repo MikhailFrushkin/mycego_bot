@@ -10,7 +10,7 @@ import bot
 from data.api import check_user_api, create_or_get_apport, get_appointments, delete_appointments, post_works, \
     get_works_lists, get_details_works_lists, del_works_lists, get_data_delivery, generate_works_base, get_statistic
 from data.config import path
-from data.db import User, Works
+from data.db import User, Works, Message, get_message_counts_by_user
 from handlers.users.back import back
 from keyboards.default.menu import menu_keyboards
 from keyboards.inline.action import generate_next_week_dates_keyboard, generate_time_keyboard, generate_time_keyboard2, \
@@ -209,7 +209,6 @@ async def bot_message(message: types.Message, state: FSMContext):
             await ViewWorkList.del_work.set()
             await bot.send_message(user_id, "Ваши сдельные листы на поставки за неделю:",
                                    reply_markup=menu_keyboards(message.from_user.id))
-            user_id_site = User.get(User.telegram_id == message.from_user.id).site_user_id
             data_delivery = get_data_delivery(user_id_site).get('data', None)
             if data_delivery:
                 logger.success(data_delivery)
@@ -240,7 +239,6 @@ async def bot_message(message: types.Message, state: FSMContext):
         elif text == '📊Статистика':
             mess = ''
             await bot.send_message(user_id, "Статистика за 7 дней")
-            user_id_site = User.get(User.telegram_id == message.from_user.id).site_user_id
             response = get_statistic(user_id_site)
             if response.status_code == 200:
                 data = response.json().get('data', None)
@@ -256,14 +254,22 @@ async def bot_message(message: types.Message, state: FSMContext):
 
         elif text == 'Обновить список работ':
             generate_works_base()
+
+        elif text == 'Статистика запросов':
+            results = get_message_counts_by_user()
+            for result in results:
+                await bot.send_message(user_id, f'{result.text}, Количество: {result.count}')
         else:
             await bot.send_message(user_id, text)
             await bot_start(message, state)
 
         await bot.send_message(880277049,
                                f'{user.username} - {message.text}')
+
+        Message.create(user=user, text=text)
     except Exception as ex:
         logger.error(ex)
+        Message.create(user=user, text=text)
         await back(message, state)
         # await message.answer("Добро пожаловать! Введите ваш логин:")
         # await AuthState.waiting_for_login.set()

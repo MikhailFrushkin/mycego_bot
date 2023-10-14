@@ -15,6 +15,7 @@ def menu_keyboards(user_id):
     menu.insert(KeyboardButton('📊Статистика'))
     if str(user_id) in ADMINS:
         menu.insert(KeyboardButton('Обновить список работ'))
+        menu.insert(KeyboardButton('Статистика запросов'))
     return menu
 
 

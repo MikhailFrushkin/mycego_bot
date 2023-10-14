@@ -101,7 +101,6 @@ def generate_works_base():
     data = get_works().get('data')
     if data:
         Works.delete().execute()
-        logger.success(data)
         for i in data:
             Works.create(id=i[0], name=i[1], delivery=i[2], standard=i[3])
 
