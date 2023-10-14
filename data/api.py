@@ -2,8 +2,10 @@ import json
 from pprint import pprint
 
 import requests
+from loguru import logger
 
 from data.config import domain
+from data.db import Works
 
 
 def check_user_api(username, password):
@@ -95,6 +97,24 @@ def get_data_delivery(user_id):
     return response.json()
 
 
+def generate_works_base():
+    data = get_works().get('data')
+    if data:
+        Works.delete().execute()
+        logger.success(data)
+        for i in data:
+            Works.create(id=i[0], name=i[1], delivery=i[2], standard=i[3])
+
+
+def get_statistic(user_id):
+    url = f'{domain}/api-auth/statistic/'
+    data = {'user_id': user_id}
+    json_data = json.dumps(data)
+    headers = {'Content-Type': 'application/json'}
+    response = requests.get(url, data=json_data, headers=headers)
+    return response
+
+
 if __name__ == '__main__':
     # check_user_api('admin', 'fma160392')
-    get_delivery()
+    get_statistic(1)

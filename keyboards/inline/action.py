@@ -58,14 +58,6 @@ def generate_time_keyboard2():
     return keyboard
 
 
-def generate_works_base():
-    data = get_works().get('data')
-    if data:
-        Works.delete().execute()
-        logger.success(data)
-        for i in data:
-            new_work = Works.create(id=i[0], name=i[1], delivery=i[2])
-
 
 def generate_works(delivery=None):
     if delivery:

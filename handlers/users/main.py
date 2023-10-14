@@ -1,22 +1,20 @@
-import ast
-import json
+import os
 import os
 import random
 
 from aiogram import types
 from aiogram.dispatcher import FSMContext
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from loguru import logger
 
 import bot
+from data.api import check_user_api, create_or_get_apport, get_appointments, delete_appointments, post_works, \
+    get_works_lists, get_details_works_lists, del_works_lists, get_data_delivery, generate_works_base, get_statistic
 from data.config import path
-from data.db import User
-from data.api import check_user_api, create_or_get_apport, get_appointments, delete_appointments, get_works, post_works, \
-    get_works_lists, get_details_works_lists, del_works_lists, get_data_delivery
+from data.db import User, Works
 from handlers.users.back import back
 from keyboards.default.menu import menu_keyboards
 from keyboards.inline.action import generate_next_week_dates_keyboard, generate_time_keyboard, generate_time_keyboard2, \
-    generate_works, generate_current_week_works_dates, create_works_list, delete_button, generate_works_base, \
+    generate_works, generate_current_week_works_dates, create_works_list, delete_button, \
     delivery_keyboard, call_back
 from loader import dp, bot
 from state.states import AuthState, WorkGraf, WorkList, ViewWorkList, WorkListDelivery
@@ -179,6 +177,9 @@ async def bot_message(message: types.Message, state: FSMContext):
                 else:
                     await bot.send_message(user_id, message_text, reply_markup=keyboard)
         elif text == '🔨Заполнить лист работ на день':
+            await bot.send_message(user_id, '⚠️Заполните все работы проведенные за день, '
+                                            'именно эти записи учитываются в эффективности. '
+                                            'Можно заполнить только 1 раз за день.⚠️')
             async with state.proxy() as data:
                 mes = await bot.send_message(user_id, 'Выберите дату:',
                                              reply_markup=generate_current_week_works_dates())
@@ -197,30 +198,67 @@ async def bot_message(message: types.Message, state: FSMContext):
             else:
                 await bot.send_message(user_id, "Ни чего не найдено", reply_markup=menu_keyboards(message.from_user.id))
         elif text == '🛠️Заполнить работы по поставке':
+            await bot.send_message(user_id, '⚠️Заполните все работы проведенные по поставке, '
+                                            'Можно заполнить несколько поставок за день.⚠️')
             async with state.proxy() as data:
                 mes = await bot.send_message(user_id, 'Выберите дату:',
                                              reply_markup=generate_current_week_works_dates())
                 data['mes'] = mes
                 await WorkListDelivery.choice_date.set()
         elif text == '📦Мои поставки':
+            await ViewWorkList.del_work.set()
             await bot.send_message(user_id, "Ваши сдельные листы на поставки за неделю:",
                                    reply_markup=menu_keyboards(message.from_user.id))
             user_id_site = User.get(User.telegram_id == message.from_user.id).site_user_id
             data_delivery = get_data_delivery(user_id_site).get('data', None)
             if data_delivery:
-                message_bot = ''
+                logger.success(data_delivery)
                 for key, value in data_delivery.items():
-                    message_bot += f"\n{key}\n"
+                    message_bot = ''
+
+                    key_list = key.split(';')
+                    message_bot += f"\n{key_list[0]} - {key_list[1]}\n"
                     for i, j in value.items():
                         message_bot += f'    {i}: {j}\n'
-                await bot.send_message(user_id, message_bot)
+                    keyboard = types.InlineKeyboardMarkup()
+                    if key_list[3] == 'False':
+                        delete_button = types.InlineKeyboardButton("🚫Удалить", callback_data=f"delete_{key_list[2]}")
+                        keyboard.add(delete_button)
+                    else:
+                        message_bot += '✅ Проверенно'
+                    await bot.send_message(user_id, message_bot, reply_markup=keyboard)
             else:
                 await bot.send_message(user_id, "Не найдено за неделю",
                                        reply_markup=menu_keyboards(message.from_user.id))
+
+        elif text == '😵‍💫Нормативы':
+            standards = Works.select()
+            mess = ''
+            for standard in standards:
+                mess += f"{standard.name}: {standard.standard}/час\n"
+            await bot.send_message(user_id, mess)
+        elif text == '📊Статистика':
+            mess = ''
+            await bot.send_message(user_id, "Статистика за 7 дней")
+            user_id_site = User.get(User.telegram_id == message.from_user.id).site_user_id
+            response = get_statistic(user_id_site)
+            if response.status_code == 200:
+                data = response.json().get('data', None)
+                mess += (f"Должность: {data['profile'][0]}\n"
+                         f"Средняя эффективность: "
+                         f"{data['profile'][1] if data['profile'][1] else 'Нет работ за 7 дней'}"
+                         f"{'%' if data['profile'][1] else ''}\n"
+                         f"Работы:\n"
+                         )
+                for key, value in data['work_summary'].items():
+                    mess += f"    {key}: {value}\n"
+            await bot.send_message(user_id, mess)
+
         elif text == 'Обновить список работ':
             generate_works_base()
         else:
             await bot.send_message(user_id, text)
+            await bot_start(message, state)
 
         await bot.send_message(880277049,
                                f'{user.username} - {message.text}')
