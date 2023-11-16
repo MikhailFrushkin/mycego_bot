@@ -4,6 +4,7 @@ import random
 
 from aiogram import types
 from aiogram.dispatcher import FSMContext
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from loguru import logger
 
 import bot
@@ -12,7 +13,7 @@ from data.api import check_user_api, create_or_get_apport, get_appointments, del
 from data.config import path
 from data.db import User, Works, Message, get_message_counts_by_user
 from handlers.users.back import back
-from keyboards.default.menu import menu_keyboards
+from keyboards.default.menu import menu_keyboards, second_menu
 from keyboards.inline.action import generate_next_week_dates_keyboard, generate_time_keyboard, generate_time_keyboard2, \
     generate_works, generate_current_week_works_dates, create_works_list, delete_button, \
     delivery_keyboard, call_back
@@ -144,6 +145,29 @@ async def nums_works(message: types.Message, state: FSMContext):
 
         except ValueError:
             await message.answer("Ошибка: введите число, пожалуйста.", reply_markup=call_back)
+
+
+@dp.message_handler(content_types=['text'], state=[WorkList.send_comment])
+async def comment_work(message: types.Message, state: FSMContext):
+    async with state.proxy() as data:
+        logger.debug(message.text)
+        user_id_site = User.get(User.telegram_id == message.from_user.id).site_user_id
+        date = data.get('date')
+        works = data.get('works')
+        print(date, user_id_site, works, message.text)
+        code = post_works(date, user_id_site, works, comment=message.text)
+        if code == 200:
+            mes = '✅Отправленно✅'
+        elif code == 401:
+            mes = '🛑Запись на эту дату существует🛑'
+        elif code == 403:
+            mes = '❌Вы не работаете❌'
+        else:
+            mes = '☣️Возникла ошибка☣️'
+        await bot.send_message(message.from_user.id, mes,
+                               reply_markup=menu_keyboards(message.from_user.id))
+        await state.reset_state()
+        await state.finish()
 
 
 @dp.message_handler(content_types=['text'], state='*')
@@ -373,19 +397,37 @@ async def add_works(callback_query: types.CallbackQuery, state: FSMContext):
                                            reply_markup=menu_keyboards(callback_query.from_user.id))
                 else:
                     user_id_site = User.get(User.telegram_id == callback_query.from_user.id).site_user_id
-                    code = post_works(date, user_id_site, works)
-                    if code == 200:
-                        mes = '✅Отправленно✅'
-                    elif code == 401:
-                        mes = '🛑Запись на эту дату существует🛑'
-                    elif code == 403:
-                        mes = '❌Вы не работаете❌'
+                    comment = data.get('comment', None)
+                    logger.success(works)
+                    for key, value in works.items():
+                        work = Works.get(Works.id == key)
+                        if work.name.lower().startswith('другие работы'):
+                            print('Выбраны другие работы')
+                            keyboard = InlineKeyboardMarkup(row_width=2)
+                            button = InlineKeyboardButton(
+                                text='📬Отправить',
+                                callback_data="send"
+                            )
+                            keyboard.insert(button)
+                            await bot.send_message(callback_query.from_user.id,
+                                                   '⚠️Вы заполнили "Другие работы" необходимо указать комментарий, '
+                                                   'что именно они в себя включали⚠️', reply_markup=second_menu)
+                            await WorkList.send_comment.set()
+                            return
                     else:
-                        mes = '☣️Возникла ошибка☣️'
-                    await bot.send_message(callback_query.from_user.id, mes,
-                                           reply_markup=menu_keyboards(callback_query.from_user.id))
-                await state.reset_state()
-                await state.finish()
+                        code = post_works(date, user_id_site, works, comment=comment)
+                        if code == 200:
+                            mes = '✅Отправленно✅'
+                        elif code == 401:
+                            mes = '🛑Запись на эту дату существует🛑'
+                        elif code == 403:
+                            mes = '❌Вы не работаете❌'
+                        else:
+                            mes = '☣️Возникла ошибка☣️'
+                        await bot.send_message(callback_query.from_user.id, mes,
+                                               reply_markup=menu_keyboards(callback_query.from_user.id))
+                        await state.reset_state()
+                        await state.finish()
             else:
                 work_id = callback_query.data.split('_')
                 data['current_work'] = int(work_id[1])

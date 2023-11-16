@@ -11,11 +11,12 @@ from data.db import Works
 def generate_next_week_dates_keyboard():
     keyboard = InlineKeyboardMarkup(row_width=2)
     today = datetime.date.today()
-
+    n = 14 - today.weekday()
     # Вычисляем дату начала следующей недели
-    next_week_start = today - datetime.timedelta(days=7)
 
-    for i in range(14):
+    next_week_start = today
+
+    for i in range(n):
         date = next_week_start + datetime.timedelta(days=i)
         button = InlineKeyboardButton(
             text=date.strftime("%Y-%m-%d"),

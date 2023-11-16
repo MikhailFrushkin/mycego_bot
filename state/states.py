@@ -18,6 +18,7 @@ class WorkList(StatesGroup):
     choice_date = State()
     choice_work = State()
     input_num = State()
+    send_comment = State()
 
 
 class WorkListDelivery(StatesGroup):

@@ -46,9 +46,9 @@ def get_works():
     return response.json()
 
 
-def post_works(date, user_id_site, works, delivery=None):
+def post_works(date, user_id_site, works, delivery=None, comment=None):
     url = f'{domain}/api-auth/add_works/'
-    data = {'date': date, 'user': user_id_site, 'works': works, 'delivery': delivery}
+    data = {'date': date, 'user': user_id_site, 'works': works, 'delivery': delivery, 'comment': comment}
     json_data = json.dumps(data)
     headers = {'Content-Type': 'application/json'}
     response = requests.post(url, data=json_data, headers=headers)
