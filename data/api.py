@@ -114,6 +114,24 @@ def get_statistic(user_id):
     return response
 
 
+def get_request(user_id):
+    url = f'{domain}/api-auth/request/'
+    data = {'user_id': user_id}
+    json_data = json.dumps(data)
+    headers = {'Content-Type': 'application/json'}
+    response = requests.get(url, data=json_data, headers=headers)
+    return response.json()
+
+
+def post_request(user_id, type_r, comment):
+    url = f'{domain}/api-auth/request/'
+    data = {'user_id': user_id, 'type_r': type_r, 'comment': comment}
+    json_data = json.dumps(data)
+    headers = {'Content-Type': 'application/json'}
+    response = requests.post(url, data=json_data, headers=headers)
+    return response.status_code
+
+
 if __name__ == '__main__':
     # check_user_api('admin', 'fma160392')
     get_statistic(1)

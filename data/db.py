@@ -1,7 +1,6 @@
 from _datetime import datetime
 from peewee import fn
 
-from marshmallow import pprint
 from peewee import Model, CharField, ForeignKeyField, BooleanField, IntegerField, DateTimeField
 from playhouse.sqlite_ext import SqliteDatabase
 

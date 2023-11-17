@@ -9,16 +9,17 @@ from loguru import logger
 
 import bot
 from data.api import check_user_api, create_or_get_apport, get_appointments, delete_appointments, post_works, \
-    get_works_lists, get_details_works_lists, del_works_lists, get_data_delivery, generate_works_base, get_statistic
+    get_works_lists, get_details_works_lists, del_works_lists, get_data_delivery, generate_works_base, get_statistic, \
+    get_request, post_request
 from data.config import path
 from data.db import User, Works, Message, get_message_counts_by_user
 from handlers.users.back import back
-from keyboards.default.menu import menu_keyboards, second_menu
+from keyboards.default.menu import menu_keyboards, second_menu, type_request, ready
 from keyboards.inline.action import generate_next_week_dates_keyboard, generate_time_keyboard, generate_time_keyboard2, \
     generate_works, generate_current_week_works_dates, create_works_list, delete_button, \
     delivery_keyboard, call_back
 from loader import dp, bot
-from state.states import AuthState, WorkGraf, WorkList, ViewWorkList, WorkListDelivery
+from state.states import AuthState, WorkGraf, WorkList, ViewWorkList, WorkListDelivery, Requests
 
 
 @dp.message_handler(commands=['start'], state='*')
@@ -170,6 +171,35 @@ async def comment_work(message: types.Message, state: FSMContext):
         await state.finish()
 
 
+@dp.message_handler(content_types=['text'], state=[Requests.type])
+async def type_request_user(message: types.Message, state: FSMContext):
+    async with state.proxy() as data:
+        if message.text == 'Назад':
+            await back(message, state)
+        else:
+            data['type_r'] = message.text
+            await bot.send_message(message.from_user.id, f'Изменение "{message.text}"\nУкажите комментарий, '
+                                                         'что и за какую дату именно нужно '
+                                                         'изменить и по какой причине',
+                                   reply_markup=second_menu)
+            await Requests.comment.set()
+
+
+@dp.message_handler(content_types=['text'], state=[Requests.comment])
+async def comment_request(message: types.Message, state: FSMContext):
+    async with state.proxy() as data:
+        if message.text == 'Назад':
+            await back(message, state)
+        else:
+            user = User.get(telegram_id=str(message.from_user.id)).site_user_id
+            code = post_request(user_id=user, type_r=data['type_r'], comment=message.text)
+            if code == 200:
+                await bot.send_message(message.from_user.id, '✅Отправленно✅')
+            else:
+                await bot.send_message(message.from_user.id, '☣️Возникла ошибка☣️')
+            await back(message, state)
+
+
 @dp.message_handler(content_types=['text'], state='*')
 async def bot_message(message: types.Message, state: FSMContext):
     try:
@@ -275,6 +305,21 @@ async def bot_message(message: types.Message, state: FSMContext):
                 for key, value in data['work_summary'].items():
                     mess += f"    {key}: {value}\n"
             await bot.send_message(user_id, mess)
+        elif text == '🐧Заявка на изменение':
+            data = get_request(user_id_site).get('data', None)
+            if data:
+                await bot.send_message(user_id,'Все заявки:')
+                for key, value in data.items():
+                    result = "Сделано" if value["result"] else "Отказ"
+                    comment_admin = value["comment_admin"] if value["comment_admin"] else "Нет"
+                    if value["result"] is None:
+                        result = "Ожидание расмотрения"
+                    await bot.send_message(user_id, f'{key}'
+                                                    f'\nКомментарий: {value["comment"]}'
+                                                    f'\nРешение: {result}'
+                                                    f'\nОтвет руководителя: {comment_admin}\n')
+            await bot.send_message(user_id, f'Выберите тип заявки', reply_markup=type_request)
+            await Requests.type.set()
 
         elif text == 'Обновить список работ':
             generate_works_base()

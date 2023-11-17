@@ -31,3 +31,8 @@ class WorkListDelivery(StatesGroup):
 class ViewWorkList(StatesGroup):
     view_work = State()
     del_work = State()
+
+
+class Requests(StatesGroup):
+    type = State()
+    comment = State()
