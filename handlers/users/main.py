@@ -292,7 +292,7 @@ async def bot_message(message: types.Message, state: FSMContext):
             await bot.send_message(user_id, mess)
         elif text == '📊Статистика':
             mess = ''
-            await bot.send_message(user_id, "Статистика за 7 дней")
+            await bot.send_message(user_id, "Статистика за 7 дней\nКоэффицент расчитывается раз в час и без учета сегодняшнего дня")
             response = get_statistic(user_id_site)
             if response.status_code == 200:
                 data = response.json().get('data', None)
@@ -306,9 +306,13 @@ async def bot_message(message: types.Message, state: FSMContext):
                     mess += f"    {key}: {value}\n"
             await bot.send_message(user_id, mess)
         elif text == '🐧Заявка на изменение':
+            await bot.send_message(user_id,
+                                   'Здесь вы можете оставить заявку на изменение уже утвержденных заявок в графике, '
+                                   'листы выполненных работ или же заявки на отпуск, если ничего не подходит можете '
+                                   'выбрать любой вариант, руководитель ознакомиться с заявкой')
             data = get_request(user_id_site).get('data', None)
             if data:
-                await bot.send_message(user_id,'Все заявки:')
+                await bot.send_message(user_id, 'Все заявки:')
                 for key, value in data.items():
                     result = "Сделано" if value["result"] else "Отказ"
                     comment_admin = value["comment_admin"] if value["comment_admin"] else "Нет"
@@ -326,7 +330,8 @@ async def bot_message(message: types.Message, state: FSMContext):
 
         elif text == 'Статистика запросов':
             results = get_message_counts_by_user()
-            for result in results:
+            await bot.send_message(user_id, f'Топ 10 запросов с {results[1]} по {results[2]}')
+            for result in results[0]:
                 await bot.send_message(user_id, f'{result.text}, Количество: {result.count}')
         else:
             await bot.send_message(user_id, text)

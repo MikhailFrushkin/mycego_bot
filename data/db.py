@@ -27,7 +27,7 @@ class Message(Model):
     timestamp = DateTimeField(default=datetime.now)
 
     def __str__(self):
-        return f'{self.user.username} {self.text}'
+        return self.text
 
     class Meta:
         database = db
@@ -48,25 +48,26 @@ def get_message_counts_by_user():
     query = (Message
              .select(Message.text, fn.COUNT(Message.id).alias('count'))
              .group_by(Message.text)
-             .order_by(fn.COUNT(Message.id).desc()))
+             .order_by(fn.COUNT(Message.id).desc()).limit(10))
 
-    # Выполнение запроса и получение результатов
-    results = query.execute()
-    return results
+    # Получить минимальную дату
+    min_date = Message.select(fn.date_trunc('day', fn.Min(Message.timestamp))).scalar()
 
-    # query = (Message
-    #          .select(User.username, Message.text, fn.COUNT(Message.id).alias('count'))
-    #          .join(User)
-    #          .group_by(User.username, Message.text))
-    #
-    # # Выполнение запроса и получение результатов
-    # results = query.execute()
-    #
-    # # Вывод уникальных значений и их количества для каждого пользователя
-    # for result in results:
-    #     print(f'Пользователь: {result.user.username}, Text: {result.text}, Количество: {result.count}')
+    # Получить максимальную дату
+    max_date = Message.select(fn.date_trunc('day', fn.Max(Message.timestamp))).scalar()
+
+    # Преобразовать строки в объекты DateTime
+    min_date = datetime.strptime(min_date, '%Y-%m-%d %H:%M:%S')
+    max_date = datetime.strptime(max_date, '%Y-%m-%d %H:%M:%S')
+
+    # Форматирование даты в строку
+    min_date_str = min_date.strftime('%Y-%m-%d')
+    max_date_str = max_date.strftime('%Y-%m-%d')
+    return query.execute(), min_date_str, max_date_str
 
 
 if __name__ == '__main__':
-    # Вызовем функцию для получения данных
-    get_message_counts_by_user()
+    results = get_message_counts_by_user()
+    print(results[1], results[2])
+    for result in results[0]:
+        print(result)
